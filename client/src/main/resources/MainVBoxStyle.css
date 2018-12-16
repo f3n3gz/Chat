@@ -1,0 +1,27 @@
+.button {
+    -fx-background-radius: 20;
+    -fx-border-radius: 20;
+}
+
+.text-area {
+    -fx-border-style: none;
+    -fx-border-image-width: 0;
+    -fx-border-insets: 0;
+    -fx-background-insets: 0;
+    -fx-text-fill: white;
+    -fx-control-inner-background: #282a36;
+    -fx-background-color: #282a36;
+    -fx-text-box-border: transparent;
+    -fx-faint-focus-color: transparent;
+    -fx-focus-color: transparent;
+    outline: none;
+}
+
+.text-area .content {
+    -fx-background-radius: 0;
+}
+
+.text-field {
+    -fx-border-radius: 20;
+    -fx-background-radius: 20;
+}
