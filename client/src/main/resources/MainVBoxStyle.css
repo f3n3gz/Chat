@@ -3,6 +3,10 @@
     -fx-border-radius: 20;
 }
 
+.label {
+    -fx-background-color: #282a36;
+    -fx-text-fill: white;
+}
 .text-area {
     -fx-border-style: none;
     -fx-border-image-width: 0;
