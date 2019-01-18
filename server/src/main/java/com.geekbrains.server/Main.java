@@ -15,7 +15,8 @@ public class Main {
         Thread serverThread = new Thread(server);
         serverThread.setDaemon(true);
         serverThread.start();
-        while (!server.END_FLAG) {
+        synchronized (server.mon) {
+            server.mon.wait();
         }
     }
 }

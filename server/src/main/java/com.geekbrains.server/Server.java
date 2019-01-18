@@ -4,13 +4,14 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
-import java.util.Vector;
+import java.util.HashSet;
+import java.util.Map;
 
 public class Server implements Runnable {
-    ServerSocket serverSocket;
-    Socket socket;
-    int port;
-    volatile boolean END_FLAG = false;
+    final Object mon = new Object();
+    private ServerSocket serverSocket;
+    private Socket socket;
+    private int port;
 
     private HashMap<String, ClientHandler> clientHandlers = new HashMap<>();
     private SimpleAuthService authService;
@@ -21,6 +22,7 @@ public class Server implements Runnable {
     }
 
     public void run() {
+
         Thread server = new Thread(() -> {
             try {
                 serverSocket = new ServerSocket(port);
@@ -40,18 +42,21 @@ public class Server implements Runnable {
         serverOutput();
     }
 
+
     private void serverOutput() {
 
         //поток для чтения консоли на серевере
         Thread serverOutput = new Thread(() -> {
             BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-            String msg = "";
+            String msg;
             while (true) {
                 try {
                     msg = in.readLine();
                     if (msg.equalsIgnoreCase("/end")) {
-                        END_FLAG = true;
                         System.out.println("end");
+                        synchronized (this.mon) {
+                            this.mon.notify();
+                        }
                     } else {
                         sendMessage(msg);
                     }
@@ -65,46 +70,56 @@ public class Server implements Runnable {
         serverOutput.start();
     }
 
-    public void sendMessage(String msg) {
+    void sendMessage(String msg) {
         for (ClientHandler clientHandler : clientHandlers.values()) {
             try {
-                clientHandler.out.writeUTF(msg);
-                clientHandler.out.flush();
+                clientHandler.getOut().writeUTF(msg);
+                clientHandler.getOut().flush();
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
 
-    public void sendPrivateMessage(String nick, String msg) {
+    void sendPrivateMessage(String nick, String msg) {
         try {
-            clientHandlers.get(nick).out.writeUTF(msg);
-            clientHandlers.get(nick).out.flush();
+            clientHandlers.get(nick).getOut().writeUTF(msg);
+            clientHandlers.get(nick).getOut().flush();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public boolean isNickConnected(String nick) {
-        return clientHandlers.keySet().contains((String) nick);
+    void broadcastClientsList() {
+        for (ClientHandler clientHandler : clientHandlers.values()) {
+            try {
+                clientHandler.getOut().writeUTF("/clients ");
+                ObjectOutputStream ob = new ObjectOutputStream(clientHandler.socket.getOutputStream());
+                ob.writeObject(new HashSet<>(clientHandlers.keySet()));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
-    public void subscribeClient(String nickName, ClientHandler clientHandler) {
+    boolean isNickConnected(String nick) {
+        return clientHandlers.keySet().contains(nick);
+    }
+
+    void subscribeClient(String nickName, ClientHandler clientHandler) {
         if (clientHandlers.containsKey(nickName)) {
             clientHandlers.get(nickName).disconnect();
         }
         clientHandlers.put(nickName, clientHandler);
+        broadcastClientsList();
     }
 
-    public void unsubscribeClient(String nick) {
+    void unsubscribeClient(String nick) {
         clientHandlers.remove(nick);
+        broadcastClientsList();
     }
 
-    public SimpleAuthService getAuthService() {
+    SimpleAuthService getAuthService() {
         return authService;
-    }
-
-    public boolean isEND_FLAG() {
-        return END_FLAG;
     }
 }
