@@ -115,6 +115,9 @@ public class ControllerMainVBox implements Initializable {
                 clientsListView.getItems().setAll(clientsList);
             });
         });
+        Network.setCallOnNickChange(args -> {
+            this.nickname = args[1].toString();
+        });
     }
 
     private void showAlert(String msg) {

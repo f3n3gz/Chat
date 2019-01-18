@@ -1,5 +1,7 @@
 package com.geekbrains.server;
 
+import com.geekbrains.server.DBClasses.DBUsers;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -14,7 +16,8 @@ public class ClientHandler {
     private Server server;
     private String nick;
     private Thread currentThread;
-
+    private String login;
+    private String password;
 
 
     public ClientHandler(Server server, Socket socket) {
@@ -55,6 +58,8 @@ public class ClientHandler {
                             }
                             if (this.nick != null) {
                                 // /authok authorizedNickName
+                                this.login = tokens[1];
+                                this.password = tokens[2];
                                 System.out.println("/authok " + this.nick);
                                 sendMessage("/authok " + this.nick);
                                 server.subscribeClient(this.nick, this);
@@ -70,7 +75,18 @@ public class ClientHandler {
                     String msg;
                     msg = in.readUTF();
                     if (msg.equalsIgnoreCase("/end")) break;
-                    else if (msg.startsWith("/w ")) {
+                    if (msg.startsWith("/newNick")) {
+                        String[] tokens = msg.split("\\s");
+                        if (tokens.length > 1) {
+                            String newNick = DBUsers.changeNickNameByLoginAndPassword(login, password, tokens[1]);
+                            if (newNick != null) {
+                                server.changeNickName(nick, newNick);
+                                this.nick = newNick;
+                                sendMessage("/newNick " + newNick);
+                            }
+
+                        }
+                    } else if (msg.startsWith("/w ")) {
                         String[] tokens = msg.split("\\s");
                         if (tokens.length > 1) {
                             String receiverNick = tokens[1];

@@ -1,6 +1,8 @@
 package com.geekbrains.client;
 
 
+import jdk.nashorn.internal.codegen.CompilerConstants;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -21,6 +23,7 @@ public class Network {
     private static Callback callOnException;
     private static Callback callOnCloseConnection;
     private static Callback callOnClientsListReceive;
+    private static Callback callOnNickChange;
 
     static {
         Callback empty = (args) -> {
@@ -44,6 +47,10 @@ public class Network {
 
     public static void setCallOnAuthenticated(Callback callOnAuthenticated) {
         Network.callOnAuthenticated = callOnAuthenticated;
+    }
+
+    public static void setCallOnNickChange(Callback callOnNickChange) {
+        Network.callOnNickChange = callOnNickChange;
     }
 
     public static void setCallOnException(Callback callOnException) {
@@ -87,6 +94,9 @@ public class Network {
                         } else if (msg.startsWith("/clients ")) {
                             ObjectInputStream ob = new ObjectInputStream(in);
                             callOnClientsListReceive.callback(ob.readObject());
+                        } else if (msg.startsWith("/newNick")) {
+                            String[] tokens = msg.split("\\s");
+                            callOnNickChange.callback(tokens);
                         } else {
                             callOnMsgReceived.callback(msg);
                         }

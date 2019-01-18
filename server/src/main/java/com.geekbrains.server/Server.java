@@ -1,14 +1,18 @@
 package com.geekbrains.server;
 
+import com.geekbrains.server.DBClasses.DBUsers;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
 public class Server implements Runnable {
     final Object mon = new Object();
+    final Object monClients = new Object();
     private ServerSocket serverSocket;
     private Socket socket;
     private int port;
@@ -38,10 +42,25 @@ public class Server implements Runnable {
             }
         });
         server.setDaemon(true);
+        try {
+            DBUsers.connect();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            System.out.println("Необходимо подключить JDBC драйвер SQLite");
+            stopServer();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         server.start();
         serverOutput();
     }
 
+    private void stopServer() {
+        synchronized (this.mon) {
+            DBUsers.disconnect();
+            this.mon.notify();
+        }
+    }
 
     private void serverOutput() {
 
@@ -54,9 +73,7 @@ public class Server implements Runnable {
                     msg = in.readLine();
                     if (msg.equalsIgnoreCase("/end")) {
                         System.out.println("end");
-                        synchronized (this.mon) {
-                            this.mon.notify();
-                        }
+                        stopServer();
                     } else {
                         sendMessage(msg);
                     }
@@ -107,16 +124,27 @@ public class Server implements Runnable {
     }
 
     void subscribeClient(String nickName, ClientHandler clientHandler) {
-        if (clientHandlers.containsKey(nickName)) {
-            clientHandlers.get(nickName).disconnect();
+        synchronized (monClients) {
+            if (clientHandlers.containsKey(nickName)) {
+                clientHandlers.get(nickName).disconnect();
+            }
+            clientHandlers.put(nickName, clientHandler);
+            broadcastClientsList();
         }
-        clientHandlers.put(nickName, clientHandler);
-        broadcastClientsList();
+    }
+
+    void changeNickName(String oldNick, String newNick) {
+        synchronized (monClients) {
+            ClientHandler clientHandler = clientHandlers.remove(oldNick);
+            subscribeClient(newNick, clientHandler);
+        }
     }
 
     void unsubscribeClient(String nick) {
-        clientHandlers.remove(nick);
-        broadcastClientsList();
+        synchronized (monClients) {
+            clientHandlers.remove(nick);
+            broadcastClientsList();
+        }
     }
 
     SimpleAuthService getAuthService() {
