@@ -7,25 +7,31 @@ import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.TextArea;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.net.Socket;
+import java.io.*;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.ResourceBundle;
-import java.util.Scanner;
 
 public class ControllerMainVBox implements Initializable {
-    private final String SERVER_ADDR = "localhost";
-    private final int SERVER_PORT = 1000;
+    @FXML
+    public ListView<String> clientsListView;
+    @FXML
+    public TextField passwordField;
+    @FXML
+    public TextField loginField;
+    final int CHAT_HISTORY_SIZE = 4;
+    @FXML
+    public VBox msgPanel;
+    @FXML
+    public HBox authPanel;
     @FXML
     TextArea chatHistory;
     @FXML
@@ -34,63 +40,47 @@ public class ControllerMainVBox implements Initializable {
     TextField textFieldInput;
     @FXML
     Button buttonSwitchPanels;
-    private Socket sock = null;
-    private DataInputStream in = null;
-    private DataOutputStream out = null;
+    @FXML
+    public Label labelNickname;
+    private String nickname;
+    private HashSet<String> clientsList;
+    private String login;
 
-    private void initializeConnection() {
-        try {
-            sock = new Socket(SERVER_ADDR, SERVER_PORT);
-            in = new DataInputStream(sock.getInputStream());
-            out = new DataOutputStream(sock.getOutputStream());
-            chatHistory.appendText("connected to " + SERVER_ADDR + ":" + SERVER_PORT + "\n");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        Thread t = new Thread(() -> {
-            try {
-                while (true) {
-                    String s = in.readUTF();
-                    if (s.equalsIgnoreCase("end")) break;
-                    chatHistory.appendText(" " + s);
-                    chatHistory.appendText("\n");
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                closeConnection();
-            }
-        });
-        t.setDaemon(true);
-        t.start();
-
+    public void setAuthentificate(boolean authenticated) {
+        authPanel.setVisible(!authenticated);
+        authPanel.setManaged(!authenticated);
+        msgPanel.setVisible(authenticated);
+        msgPanel.setManaged(authenticated);
     }
 
-
-    public void addToChatHistory(ActionEvent actionEvent) {
-        if (textFieldInput.getText().length() > 0) {
-            chatHistory.appendText(textFieldInput.getText());
-            int i = chatHistory.getPrefRowCount();
+    public void sendMessage(ActionEvent actionEvent) {
+        String msg = textFieldInput.getText();
+        if (msg.equalsIgnoreCase("/close")) {
+            ChatHistory.close();
+            return;
         }
-        try {
-            out.writeUTF(textFieldInput.getText());
-            out.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
+        if (Network.sendMessage(msg)) {
+            textFieldInput.clear();
         }
-        textFieldInput.clear();
     }
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        //textFieldInput.requestFocus();
-        Platform.runLater(() -> textFieldInput.requestFocus());
+        setAuthentificate(Network.isAuthenticated());
+        linkCallbacks();
     }
 
     public void textFieldKey(KeyEvent keyEvent) {
         if (keyEvent.getCode() == KeyCode.ENTER) {
-            addToChatHistory(new ActionEvent());
+            sendMessage(new ActionEvent());
         }
+    }
+
+    private void sendAuth() {
+        Network.authorization(loginField.getText(), passwordField.getText());
+        login = loginField.getText();
+        loginField.clear();
+        passwordField.clear();
     }
 
     public void switchPanel(ActionEvent actionEvent) {
@@ -108,26 +98,61 @@ public class ControllerMainVBox implements Initializable {
 
     }
 
-    public void connectToServer(ActionEvent actionEvent) {
-        if (sock == null)
-            initializeConnection();
+    public void linkCallbacks() {
+        Network.setCallOnException(args -> showAlert((String) args[0]));
+
+        Network.setCallOnCloseConnection(args -> setAuthentificate(false));
+
+        Network.setCallOnAuthenticated(args -> {
+            try {
+                System.out.println("CallOnAuthenticated");
+
+                nickname = args[0].toString();
+                ChatHistory.openChatHistory(login);
+                // берем из сообения из истории
+                ArrayList<String> messages = ChatHistory.getLastMessages(CHAT_HISTORY_SIZE);
+                if (messages != null) {
+                    for (int i = messages.size() - 1; i >= 0; i--) {
+                        chatHistory.appendText(messages.get(i)); // ? - /n
+                    }
+                }
+                setAuthentificate(true);
+                System.out.println(nickname);
+            } catch (IOException e) {
+                System.err.println(e.getMessage());
+            }
+        });
+
+        Network.setCallOnMsgReceived(args -> {
+            String msg = args[0].toString();
+            chatHistory.appendText(msg + "\n");
+            ChatHistory.add(msg);
+        });
+
+        Network.setCallOnClientsListReceive(args -> {
+            clientsList = (HashSet<String>) args[0];
+            Platform.runLater(() -> {
+                clientsListView.getItems().clear();
+                clientsListView.getItems().setAll(clientsList);
+            });
+        });
+        Network.setCallOnNickChange(args -> {
+            this.nickname = args[1].toString();
+        });
     }
 
-    public void closeConnection() {
-        try {
-            in.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+    private void showAlert(String msg) {
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.WARNING, msg, ButtonType.OK);
+            alert.showAndWait();
+        });
+
+    }
+
+    public void connectToServer(ActionEvent actionEvent) {
+        if (!Network.isConnected()) {
+            Network.initializeConnection();
         }
-        try {
-            out.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        try {
-            sock.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        if (Network.isConnected()) sendAuth();
     }
 }
