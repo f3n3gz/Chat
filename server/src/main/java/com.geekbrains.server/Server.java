@@ -12,7 +12,7 @@ import java.util.Map;
 
 public class Server implements Runnable {
     final Object mon = new Object();
-    final Object monClients = new Object();
+    private final Object monClients = new Object();
     private ServerSocket serverSocket;
     private Socket socket;
     private int port;

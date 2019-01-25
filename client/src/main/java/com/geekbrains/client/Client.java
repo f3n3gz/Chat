@@ -19,6 +19,12 @@ public class Client extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+//        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+//            @Override
+//            public void run() {
+//                ChatHistory.close();
+//            }
+//        }));
         VBox vBox = null;
         try {
             vBox = FXMLLoader.load(getClass().getResource("/MainVBox.fxml"));

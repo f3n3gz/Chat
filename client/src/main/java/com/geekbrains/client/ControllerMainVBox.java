@@ -16,9 +16,9 @@ import javafx.stage.Stage;
 
 import java.io.*;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.ResourceBundle;
-import java.util.Set;
 
 public class ControllerMainVBox implements Initializable {
     @FXML
@@ -27,10 +27,7 @@ public class ControllerMainVBox implements Initializable {
     public TextField passwordField;
     @FXML
     public TextField loginField;
-
-    public Label labelNickname;
-    private String nickname;
-    private HashSet<String> clientsList;
+    final int CHAT_HISTORY_SIZE = 4;
     @FXML
     public VBox msgPanel;
     @FXML
@@ -43,6 +40,11 @@ public class ControllerMainVBox implements Initializable {
     TextField textFieldInput;
     @FXML
     Button buttonSwitchPanels;
+    @FXML
+    public Label labelNickname;
+    private String nickname;
+    private HashSet<String> clientsList;
+    private String login;
 
     public void setAuthentificate(boolean authenticated) {
         authPanel.setVisible(!authenticated);
@@ -53,6 +55,10 @@ public class ControllerMainVBox implements Initializable {
 
     public void sendMessage(ActionEvent actionEvent) {
         String msg = textFieldInput.getText();
+        if (msg.equalsIgnoreCase("/close")) {
+            ChatHistory.close();
+            return;
+        }
         if (Network.sendMessage(msg)) {
             textFieldInput.clear();
         }
@@ -72,6 +78,7 @@ public class ControllerMainVBox implements Initializable {
 
     private void sendAuth() {
         Network.authorization(loginField.getText(), passwordField.getText());
+        login = loginField.getText();
         loginField.clear();
         passwordField.clear();
     }
@@ -97,15 +104,29 @@ public class ControllerMainVBox implements Initializable {
         Network.setCallOnCloseConnection(args -> setAuthentificate(false));
 
         Network.setCallOnAuthenticated(args -> {
-            System.out.println("CallOnAuthenticated");
-            nickname = args[0].toString();
-            setAuthentificate(true);
-            System.out.println(nickname);
+            try {
+                System.out.println("CallOnAuthenticated");
+
+                nickname = args[0].toString();
+                ChatHistory.openChatHistory(login);
+                // берем из сообения из истории
+                ArrayList<String> messages = ChatHistory.getLastMessages(CHAT_HISTORY_SIZE);
+                if (messages != null) {
+                    for (int i = messages.size() - 1; i >= 0; i--) {
+                        chatHistory.appendText(messages.get(i)); // ? - /n
+                    }
+                }
+                setAuthentificate(true);
+                System.out.println(nickname);
+            } catch (IOException e) {
+                System.err.println(e.getMessage());
+            }
         });
 
         Network.setCallOnMsgReceived(args -> {
             String msg = args[0].toString();
             chatHistory.appendText(msg + "\n");
+            ChatHistory.add(msg);
         });
 
         Network.setCallOnClientsListReceive(args -> {
